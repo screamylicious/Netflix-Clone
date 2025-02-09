@@ -1,6 +1,7 @@
 import bcryptjs from "bcryptjs";
 
 import { User } from "../models/user.model.js";
+import { generateTokenAndSetCookie } from "../utils/generateToken.js";
 export async function signup(req, res) {
   try {
     const { email, password, username } = req.body;
@@ -40,10 +41,11 @@ export async function signup(req, res) {
       username,
       image,
     });
+
+    generateTokenAndSetCookie(newUser._id, res);
     await newUser.save();
 
     const { password: _, ...userData } = newUser._doc;
-
     return res.status(201).json({ success: true, user: userData });
   } catch (error) {
     console.log("Error in signup controller", error.message);
@@ -52,9 +54,39 @@ export async function signup(req, res) {
 }
 
 export async function login(req, res) {
-  res.send("Login Route");
+  try {
+    const { email, password } = req.body;
+    if (!email || !password)
+      return res
+        .status(400)
+        .json({ success: false, message: "All fields are required" });
+    const user = await User.findOne({ email: email });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invalid credentials" });
+    }
+    const isPasswordCorrect = await bcryptjs.compare(password, user.password);
+    if (!isPasswordCorrect)
+      return res
+        .status(404)
+        .json({ success: false, message: "Invalid credentials" });
+
+    generateTokenAndSetCookie(user._id, res);
+    const { password: _, ...userData } = user._doc;
+    return res.status(200).json({ success: true, user: userData });
+  } catch (error) {
+    console.log("Error in login controller", error.message);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
 }
 
 export async function logout(req, res) {
-  res.send("Logout Route");
+  try {
+    res.clearCookie("jwt-netflix");
+    res.status(200).json({ success: true, message: "Logged out succesfully" });
+  } catch (error) {
+    console.log("Error in logout controller", error.message);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
 }
